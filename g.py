@@ -28,23 +28,18 @@ def init_db():
     cur.execute('''
         CREATE TABLE IF NOT EXISTS messages (
             id SERIAL PRIMARY KEY,
-            name TEXT,
-            email TEXT,
-            phone TEXT, 
-            message TEXT,
+            name TEXT, email TEXT, phone TEXT, message TEXT,
             date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     ''')
     cur.execute('''
         CREATE TABLE IF NOT EXISTS about (
-            id SERIAL PRIMARY KEY,
-            content TEXT
+            id SERIAL PRIMARY KEY, content TEXT
         );
     ''')
     conn.commit()
     cur.close()
     conn.close()
-    print("✅ Database Synchronized")
 
 @app.route('/api/projects', methods=['GET', 'POST'])
 def handle_projects():
@@ -59,6 +54,8 @@ def handle_projects():
             (data.get('title'), data.get('description'), data.get('image_url'), data.get('tech_stack', 'FullStack'))
         )
         conn.commit()
+        cur.close()
+        conn.close()
         return jsonify({"status": "created"}), 201
     cur.execute('SELECT * FROM projects ORDER BY id DESC')
     res = cur.fetchall()
@@ -74,7 +71,6 @@ def project_detail(id):
     cur = conn.cursor()
     if request.method == 'PUT':
         data = request.json
-        # التعديل هنا: أضفنا 'FullStack' كقيمة افتراضية إذا لم ترسلها اللوحة
         cur.execute(
             'UPDATE projects SET title=%s, description=%s, image_url=%s, tech_stack=%s WHERE id=%s',
             (data.get('title'), data.get('description'), data.get('image_url'), data.get('tech_stack', 'FullStack'), id)
@@ -90,17 +86,17 @@ def project_detail(id):
         conn.close()
         return jsonify({"status": "deleted"})
 
-@app.route('/api/messages', methods=['GET', 'POST', 'DELETE'])
+@app.route('/api/messages', methods=['GET', 'POST'])
 def handle_messages():
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     if request.method == 'POST':
         data = request.json
-        cur.execute(
-            'INSERT INTO messages (name, email, phone, message) VALUES (%s, %s, %s, %s)',
-            (data.get('name'), data.get('email'), data.get('phone'), data.get('message'))
-        )
+        cur.execute('INSERT INTO messages (name, email, phone, message) VALUES (%s, %s, %s, %s)',
+                    (data.get('name'), data.get('email'), data.get('phone'), data.get('message')))
         conn.commit()
+        cur.close()
+        conn.close()
         return jsonify({"status": "sent"}), 201
     if request.headers.get('X-API-KEY') != API_PASSWORD:
         return jsonify({"error": "Unauthorized"}), 401
@@ -133,6 +129,8 @@ def handle_about():
         cur.execute('DELETE FROM about')
         cur.execute('INSERT INTO about (content) VALUES (%s)', (content,))
         conn.commit()
+        cur.close()
+        conn.close()
         return jsonify({"status": "updated"})
     cur.execute('SELECT * FROM about LIMIT 1')
     res = cur.fetchone() or {"content": ""}
