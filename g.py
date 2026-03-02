@@ -3,6 +3,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import requests # سنستخدمه للرفع الخارجي السهل
 
 app = Flask(__name__)
 CORS(app)
@@ -13,6 +14,7 @@ DATABASE_URL = os.getenv('DATABASE_URL')
 def get_db_connection():
     return psycopg2.connect(DATABASE_URL, sslmode='require')
 
+# إنشاء الجداول عند التشغيل
 def init_db():
     conn = get_db_connection()
     cur = conn.cursor()
@@ -41,6 +43,23 @@ def init_db():
     cur.close()
     conn.close()
 
+# --- مسار رفع الملفات (جديد) ---
+@app.route('/api/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file"}), 400
+    file = request.files['file']
+    # ملاحظة: للسهولة، سنستخدم خدمة رفع مجانية مؤقتة لتجربة اللوحة
+    # في المستقبل يفضل استخدام Cloudinary
+    try:
+        files = {'file': (file.filename, file.stream, file.mimetype)}
+        response = requests.post('https://tmpfiles.org/api/v1/upload', files=files)
+        file_url = response.json()['data']['url'].replace('https://tmpfiles.org/', 'https://tmpfiles.org/dl/')
+        return jsonify({"url": file_url})
+    except:
+        return jsonify({"error": "Upload failed"}), 500
+
+# --- مسارات المشاريع ---
 @app.route('/api/projects', methods=['GET', 'POST'])
 def handle_projects():
     conn = get_db_connection()
@@ -86,6 +105,28 @@ def project_detail(id):
         conn.close()
         return jsonify({"status": "deleted"})
 
+# --- مسارات النبذة ---
+@app.route('/api/about', methods=['GET', 'POST'])
+def handle_about():
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    if request.method == 'POST':
+        if request.headers.get('X-API-KEY') != API_PASSWORD:
+            return jsonify({"error": "Unauthorized"}), 401
+        content = request.json.get('content')
+        cur.execute('DELETE FROM about')
+        cur.execute('INSERT INTO about (content) VALUES (%s)', (content,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"status": "updated"})
+    cur.execute('SELECT * FROM about LIMIT 1')
+    res = cur.fetchone() or {"content": ""}
+    cur.close()
+    conn.close()
+    return jsonify(res)
+
+# --- مسارات الرسائل ---
 @app.route('/api/messages', methods=['GET', 'POST'])
 def handle_messages():
     conn = get_db_connection()
@@ -117,26 +158,6 @@ def delete_message(id):
     cur.close()
     conn.close()
     return jsonify({"status": "deleted"})
-
-@app.route('/api/about', methods=['GET', 'POST'])
-def handle_about():
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    if request.method == 'POST':
-        if request.headers.get('X-API-KEY') != API_PASSWORD:
-            return jsonify({"error": "Unauthorized"}), 401
-        content = request.json.get('content')
-        cur.execute('DELETE FROM about')
-        cur.execute('INSERT INTO about (content) VALUES (%s)', (content,))
-        conn.commit()
-        cur.close()
-        conn.close()
-        return jsonify({"status": "updated"})
-    cur.execute('SELECT * FROM about LIMIT 1')
-    res = cur.fetchone() or {"content": ""}
-    cur.close()
-    conn.close()
-    return jsonify(res)
 
 init_db()
 
