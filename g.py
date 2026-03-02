@@ -158,6 +158,38 @@ def delete_message(id):
     cur.close()
     conn.close()
     return jsonify({"status": "deleted"})
+async function uploadFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    const btn = document.querySelector('.inner-upload-btn');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; // علامة تحميل
+    
+    const formData = new FormData();
+    formData.append('image', file);
+
+    // ملاحظة: هذا مفتاح تجريبي مجاني (API KEY) لخدمة ImgBB
+    const apiKey = '008a096c4b22c67699d7d425b07849e5'; 
+
+    try {
+        const res = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
+            method: 'POST',
+            body: formData
+        });
+        const result = await res.json();
+        
+        if(result.success) {
+            document.getElementById('i').value = result.data.url; // ملئ الخانة تلقائياً
+            alert("✅ تم رفع الصورة بنجاح والحصول على الرابط!");
+        } else {
+            alert("❌ فشل الرفع: " + result.error.message);
+        }
+    } catch (e) {
+        alert("❌ خطأ في الاتصال بسيرفر الصور العالمي");
+    } finally {
+        btn.innerHTML = '<i class="fas fa-camera"></i>';
+    }
+    }
 
 init_db()
 
