@@ -3,7 +3,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import requests # سنستخدمه للرفع الخارجي السهل
+import requests
 
 app = Flask(__name__)
 CORS(app)
@@ -14,7 +14,6 @@ DATABASE_URL = os.getenv('DATABASE_URL')
 def get_db_connection():
     return psycopg2.connect(DATABASE_URL, sslmode='require')
 
-# إنشاء الجداول عند التشغيل
 def init_db():
     conn = get_db_connection()
     cur = conn.cursor()
@@ -43,23 +42,7 @@ def init_db():
     cur.close()
     conn.close()
 
-# --- مسار رفع الملفات (جديد) ---
-@app.route('/api/upload', methods=['POST'])
-def upload_file():
-    if 'file' not in request.files:
-        return jsonify({"error": "No file"}), 400
-    file = request.files['file']
-    # ملاحظة: للسهولة، سنستخدم خدمة رفع مجانية مؤقتة لتجربة اللوحة
-    # في المستقبل يفضل استخدام Cloudinary
-    try:
-        files = {'file': (file.filename, file.stream, file.mimetype)}
-        response = requests.post('https://tmpfiles.org/api/v1/upload', files=files)
-        file_url = response.json()['data']['url'].replace('https://tmpfiles.org/', 'https://tmpfiles.org/dl/')
-        return jsonify({"url": file_url})
-    except:
-        return jsonify({"error": "Upload failed"}), 500
-
-# --- مسارات المشاريع ---
+# مسارات المشاريع والرسائل والنبذة (كما هي في كودك السابق)
 @app.route('/api/projects', methods=['GET', 'POST'])
 def handle_projects():
     conn = get_db_connection()
@@ -68,10 +51,8 @@ def handle_projects():
         if request.headers.get('X-API-KEY') != API_PASSWORD:
             return jsonify({"error": "Unauthorized"}), 401
         data = request.json
-        cur.execute(
-            'INSERT INTO projects (title, description, image_url, tech_stack) VALUES (%s, %s, %s, %s)',
-            (data.get('title'), data.get('description'), data.get('image_url'), data.get('tech_stack', 'FullStack'))
-        )
+        cur.execute('INSERT INTO projects (title, description, image_url, tech_stack) VALUES (%s, %s, %s, %s)',
+                    (data.get('title'), data.get('description'), data.get('image_url'), data.get('tech_stack', 'FullStack')))
         conn.commit()
         cur.close()
         conn.close()
@@ -90,10 +71,8 @@ def project_detail(id):
     cur = conn.cursor()
     if request.method == 'PUT':
         data = request.json
-        cur.execute(
-            'UPDATE projects SET title=%s, description=%s, image_url=%s, tech_stack=%s WHERE id=%s',
-            (data.get('title'), data.get('description'), data.get('image_url'), data.get('tech_stack', 'FullStack'), id)
-        )
+        cur.execute('UPDATE projects SET title=%s, description=%s, image_url=%s, tech_stack=%s WHERE id=%s',
+                    (data.get('title'), data.get('description'), data.get('image_url'), data.get('tech_stack', 'FullStack'), id))
         conn.commit()
         cur.close()
         conn.close()
@@ -105,7 +84,6 @@ def project_detail(id):
         conn.close()
         return jsonify({"status": "deleted"})
 
-# --- مسارات النبذة ---
 @app.route('/api/about', methods=['GET', 'POST'])
 def handle_about():
     conn = get_db_connection()
@@ -126,7 +104,6 @@ def handle_about():
     conn.close()
     return jsonify(res)
 
-# --- مسارات الرسائل ---
 @app.route('/api/messages', methods=['GET', 'POST'])
 def handle_messages():
     conn = get_db_connection()
@@ -158,42 +135,10 @@ def delete_message(id):
     cur.close()
     conn.close()
     return jsonify({"status": "deleted"})
-async function uploadFile(input) {
-    const file = input.files[0];
-    if (!file) return;
-    
-    const btn = document.querySelector('.inner-upload-btn');
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; // علامة تحميل
-    
-    const formData = new FormData();
-    formData.append('image', file);
-
-    // ملاحظة: هذا مفتاح تجريبي مجاني (API KEY) لخدمة ImgBB
-    const apiKey = '008a096c4b22c67699d7d425b07849e5'; 
-
-    try {
-        const res = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
-            method: 'POST',
-            body: formData
-        });
-        const result = await res.json();
-        
-        if(result.success) {
-            document.getElementById('i').value = result.data.url; // ملئ الخانة تلقائياً
-            alert("✅ تم رفع الصورة بنجاح والحصول على الرابط!");
-        } else {
-            alert("❌ فشل الرفع: " + result.error.message);
-        }
-    } catch (e) {
-        alert("❌ خطأ في الاتصال بسيرفر الصور العالمي");
-    } finally {
-        btn.innerHTML = '<i class="fas fa-camera"></i>';
-    }
-    }
 
 init_db()
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
-    
+        
