@@ -5,24 +5,18 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app) # للسماح بالاتصال من واجهة موقعك في Netlify
+CORS(app)
 
-# كلمة السر الخاصة بلوحة تحكم EBQAD
 API_PASSWORD = "EBQAD_SECURE_2026"
-
-# جلب رابط قاعدة البيانات من المتغيرات التي وضعناها في Railway
 DATABASE_URL = os.getenv('DATABASE_URL')
 
 def get_db_connection():
-    # الاتصال بقاعدة PostgreSQL الدائمية
-    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
-    return conn
+    return psycopg2.connect(DATABASE_URL, sslmode='require')
 
 def init_db():
-    """تأسيس الجداول تلقائياً في PostgreSQL إذا لم تكن موجودة"""
     conn = get_db_connection()
     cur = conn.cursor()
-    # إنشاء جدول المشاريع
+    # جدول المشاريع
     cur.execute('''
         CREATE TABLE IF NOT EXISTS projects (
             id SERIAL PRIMARY KEY,
@@ -32,33 +26,28 @@ def init_db():
             tech_stack TEXT DEFAULT 'FullStack'
         );
     ''')
-    # إنشاء جدول الرسائل
+    # جدول الرسائل (أضفنا خانة الهاتف phone)
     cur.execute('''
         CREATE TABLE IF NOT EXISTS messages (
             id SERIAL PRIMARY KEY,
             name TEXT,
             email TEXT,
+            phone TEXT, 
             message TEXT,
             date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     ''')
-    # إنشاء جدول النبذة (About)
+    # جدول النبذة
     cur.execute('''
         CREATE TABLE IF NOT EXISTS about (
             id SERIAL PRIMARY KEY,
             content TEXT
         );
     ''')
-    
-    # التأكد من وجود محتوى افتراضي في About
-    cur.execute('SELECT COUNT(*) FROM about')
-    if cur.fetchone()[0] == 0:
-        cur.execute('INSERT INTO about (content) VALUES (%s)', ("Default Content",))
-        
     conn.commit()
     cur.close()
     conn.close()
-    print("✅ Database Permanently Initialized")
+    print("✅ Database Synchronized")
 
 @app.route('/api/projects', methods=['GET', 'POST'])
 def handle_projects():
@@ -66,45 +55,107 @@ def handle_projects():
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
     if request.method == 'POST':
-        # التحقق من كلمة السر المرسلة في الـ Header
         if request.headers.get('X-API-KEY') != API_PASSWORD:
             return jsonify({"error": "Unauthorized"}), 401
-            
         data = request.json
         cur.execute(
             'INSERT INTO projects (title, description, image_url, tech_stack) VALUES (%s, %s, %s, %s)',
             (data.get('title'), data.get('description'), data.get('image_url'), data.get('tech_stack'))
         )
         conn.commit()
-        cur.close()
-        conn.close()
-        return jsonify({"status": "success"}), 201
+        return jsonify({"status": "created"}), 201
 
-    # جلب المشاريع لعرضها
     cur.execute('SELECT * FROM projects ORDER BY id DESC')
     res = cur.fetchall()
     cur.close()
     conn.close()
     return jsonify(res)
 
-@app.route('/api/projects/<int:id>', methods=['DELETE'])
-def delete_project(id):
+# --- الدالة المفقودة التي تسبب مشكلة التحديث ---
+@app.route('/api/projects/<int:id>', methods=['PUT', 'DELETE'])
+def project_detail(id):
     if request.headers.get('X-API-KEY') != API_PASSWORD:
         return jsonify({"error": "Unauthorized"}), 401
         
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute('DELETE FROM projects WHERE id=%s', (id,))
+
+    if request.method == 'PUT':
+        data = request.json
+        cur.execute(
+            'UPDATE projects SET title=%s, description=%s, image_url=%s, tech_stack=%s WHERE id=%s',
+            (data.get('title'), data.get('description'), data.get('image_url'), data.get('tech_stack'), id)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"status": "updated"})
+
+    elif request.method == 'DELETE':
+        cur.execute('DELETE FROM projects WHERE id=%s', (id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"status": "deleted"})
+
+@app.route('/api/messages', methods=['GET', 'POST', 'DELETE'])
+def handle_messages():
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+
+    if request.method == 'POST':
+        data = request.json
+        cur.execute(
+            'INSERT INTO messages (name, email, phone, message) VALUES (%s, %s, %s, %s)',
+            (data.get('name'), data.get('email'), data.get('phone'), data.get('message'))
+        )
+        conn.commit()
+        return jsonify({"status": "sent"}), 201
+
+    if request.headers.get('X-API-KEY') != API_PASSWORD:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    cur.execute('SELECT * FROM messages ORDER BY id DESC')
+    res = cur.fetchall()
+    cur.close()
+    conn.close()
+    return jsonify(res)
+
+# إضافة مسار حذف الرسالة لتعمل اللوحة بشكل كامل
+@app.route('/api/messages/<int:id>', methods=['DELETE'])
+def delete_message(id):
+    if request.headers.get('X-API-KEY') != API_PASSWORD:
+        return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('DELETE FROM messages WHERE id=%s', (id,))
     conn.commit()
     cur.close()
     conn.close()
     return jsonify({"status": "deleted"})
 
-# تأسيس القاعدة عند تشغيل السيرفر
+@app.route('/api/about', methods=['GET', 'POST'])
+def handle_about():
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    if request.method == 'POST':
+        if request.headers.get('X-API-KEY') != API_PASSWORD:
+            return jsonify({"error": "Unauthorized"}), 401
+        content = request.json.get('content')
+        cur.execute('DELETE FROM about') # نمسح القديم
+        cur.execute('INSERT INTO about (content) VALUES (%s)', (content,))
+        conn.commit()
+        return jsonify({"status": "updated"})
+    
+    cur.execute('SELECT * FROM about LIMIT 1')
+    res = cur.fetchone() or {"content": ""}
+    cur.close()
+    conn.close()
+    return jsonify(res)
+
 init_db()
 
 if __name__ == '__main__':
-    # التشغيل على المنفذ المطلوب من قبل Railway
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
-    
+        
