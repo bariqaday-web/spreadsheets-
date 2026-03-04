@@ -1,4 +1,4 @@
-import os
+Import os
 import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -6,6 +6,7 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # يسمح برفع حتى 16 ميجابايت
 
 # السماح بالوصول من أي مكان (Netlify, Mobile, etc.)
 CORS(app, resources={r"/*": {"origins": "*"}}) 
@@ -80,3 +81,5 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
     
+
+
