@@ -8,9 +8,8 @@ from datetime import datetime
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # يسمح برفع حتى 16 ميجابايت
 
-# السماح بالوصول من أي مكان (Netlify, Mobile, etc.)
-CORS(app, resources={r"/*": {"origins": "*"}}) 
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
 
 # إعدادات قاعدة بيانات Neon (تخزين الروابط)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://neondb_owner:npg_m8LEJPzVH7jw@ep-sweet-mode-ai35kmho-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require'
