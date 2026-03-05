@@ -8,48 +8,47 @@ from datetime import datetime
 app = Flask(__name__)
 CORS(app)
 
-# ربط القاعدة مع السيرفر على Railway أو fallback للـ SQLite محلياً
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
-    "DATABASE_URL",
-    "sqlite:///local.db"
-)
+# قاعدة البيانات: PostgreSQL على Railway أو SQLite محلي
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DATABASE_URL", "sqlite:///local.db")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-# جداول المشروع
+# جدول المشاريع
 class Project(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
-    description = db.Column(db.Text)
-    image_url = db.Column(db.Text)
+    description = db.Column(db.Text, nullable=True)
+    image_url = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+# جدول الرسائل
 class Message(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100))
-    email = db.Column(db.String(150))  # حقل الايميل
-    message = db.Column(db.Text)
+    name = db.Column(db.String(100), nullable=True)
+    email = db.Column(db.String(150), nullable=True)
+    message = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+# جدول النص التعريفي
 class About(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    content = db.Column(db.Text)
+    content = db.Column(db.Text, nullable=True)
 
 with app.app_context():
     db.create_all()
 
-# رفع الصور
+# --- رفع الصور ---
 @app.route("/api/upload", methods=["POST"])
 def upload():
     if "file" not in request.files:
         return jsonify({"error": "no file"}), 400
     file = request.files["file"]
-    imgbb_key = "6876793f18a24c535787964a06560946"  # ضع مفتاحك هنا
+    imgbb_key = "6876793f18a24c535787964a06560946"  # مفتاحك
     try:
         r = requests.post(
             "https://api.imgbb.com/1/upload",
             params={"key": imgbb_key},
-            files={"image": file}  # استخدام file object مباشرة
+            files={"image": file}
         )
         if r.status_code == 200:
             return jsonify({"url": r.json()["data"]["url"]})
@@ -57,58 +56,54 @@ def upload():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# المشاريع
+# --- مشاريع ---
 @app.route("/api/projects", methods=["GET", "POST"])
 def projects():
     if request.method == "POST":
         data = request.json
+        title = data.get("title")
+        if not title:
+            return jsonify({"error": "title required"}), 400
         p = Project(
-            title=data.get("title"),
-            description=data.get("description"),
-            image_url=data.get("image_url") or ""  # السماح بدون صورة
+            title=title,
+            description=data.get("description") or "",
+            image_url=data.get("image_url") or ""
         )
         db.session.add(p)
         db.session.commit()
         return jsonify({"message": "created"}), 201
-
     items = Project.query.order_by(Project.id.desc()).all()
-    return jsonify([
-        {"id": p.id, "title": p.title, "description": p.description, "image_url": p.image_url}
-        for p in items
-    ])
+    return jsonify([{"id": p.id, "title": p.title, "description": p.description, "image_url": p.image_url} for p in items])
 
 @app.route("/api/projects/<int:id>", methods=["PUT", "DELETE"])
 def project_edit(id):
     p = Project.query.get_or_404(id)
     if request.method == "PUT":
         data = request.json
-        p.title = data.get("title")
-        p.description = data.get("description")
-        p.image_url = data.get("image_url") or ""
+        p.title = data.get("title") or p.title
+        p.description = data.get("description") or p.description
+        p.image_url = data.get("image_url") or p.image_url
         db.session.commit()
         return jsonify({"message": "updated"})
     db.session.delete(p)
     db.session.commit()
     return jsonify({"message": "deleted"})
 
-# الرسائل
+# --- الرسائل ---
 @app.route("/api/messages", methods=["GET", "POST"])
 def messages():
     if request.method == "POST":
         data = request.json
         m = Message(
-            name=data.get("name"),
-            email=data.get("email") or "",  # السماح بإيميل فارغ
-            message=data.get("message")
+            name=data.get("name") or "",
+            email=data.get("email") or "",
+            message=data.get("message") or ""
         )
         db.session.add(m)
         db.session.commit()
         return jsonify({"message": "sent"})
     msgs = Message.query.order_by(Message.id.desc()).all()
-    return jsonify([
-        {"id": m.id, "name": m.name, "email": m.email, "message": m.message}
-        for m in msgs
-    ])
+    return jsonify([{"id": m.id, "name": m.name, "email": m.email, "message": m.message} for m in msgs])
 
 @app.route("/api/messages/<int:id>", methods=["DELETE"])
 def delete_message(id):
@@ -117,7 +112,7 @@ def delete_message(id):
     db.session.commit()
     return jsonify({"message": "deleted"})
 
-# about
+# --- النص التعريفي ---
 @app.route("/api/about", methods=["GET", "POST"])
 def about():
     a = About.query.first()
@@ -133,5 +128,5 @@ def about():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    print("Starting server at https://web-production-387d.up.railway.app/")
+    print("Server running at https://web-production-387d.up.railway.app/")
     app.run(host="0.0.0.0", port=port)
