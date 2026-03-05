@@ -5,13 +5,13 @@ from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 
-# هذا هو الـ app الذي سيبحث عنه gunicorn n:app
+# التأكد أن اسم المتغير app حصراً وبالصغير
 app = Flask(__name__)
 
 # إعدادات حجم الملف
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 
 
-# إعدادات CORS للسماح بالاتصال من Netlify
+# إعدادات CORS
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 # قاعدة بيانات Neon
@@ -29,7 +29,6 @@ class Project(db.Model):
     image_url = db.Column(db.Text) 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-# إنشاء الجداول عند التشغيل
 with app.app_context():
     db.create_all()
 
@@ -75,7 +74,6 @@ def delete_project(id):
     db.session.commit()
     return jsonify({"message": "Deleted"})
 
-# هذا الجزء مهم للتشغيل المحلي، لكن Gunicorn سيتجاهله ويستخدم 'app' مباشرة
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
