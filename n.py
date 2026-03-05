@@ -5,16 +5,22 @@ from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 
+# هذا هو الـ app الذي سيبحث عنه gunicorn n:app
 app = Flask(__name__)
+
+# إعدادات حجم الملف
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 
 
+# إعدادات CORS للسماح بالاتصال من Netlify
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
+# قاعدة بيانات Neon
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://neondb_owner:npg_m8LEJPzVH7jw@ep-sweet-mode-ai35kmho-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
+# تعريف الجداول
 class Project(db.Model):
     __tablename__ = 'projects'
     id = db.Column(db.Integer, primary_key=True)
@@ -23,6 +29,7 @@ class Project(db.Model):
     image_url = db.Column(db.Text) 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+# إنشاء الجداول عند التشغيل
 with app.app_context():
     db.create_all()
 
@@ -49,10 +56,15 @@ def upload_file():
 def handle_projects():
     if request.method == 'POST':
         data = request.json
-        new_p = Project(title=data.get('title'), description=data.get('description'), image_url=data.get('image_url'))
+        new_p = Project(
+            title=data.get('title'), 
+            description=data.get('description'), 
+            image_url=data.get('image_url')
+        )
         db.session.add(new_p)
         db.session.commit()
         return jsonify({"message": "Saved"}), 201
+    
     all_p = Project.query.order_by(Project.created_at.desc()).all()
     return jsonify([{"id":p.id,"title":p.title,"description":p.description,"image_url":p.image_url} for p in all_p])
 
@@ -63,7 +75,8 @@ def delete_project(id):
     db.session.commit()
     return jsonify({"message": "Deleted"})
 
+# هذا الجزء مهم للتشغيل المحلي، لكن Gunicorn سيتجاهله ويستخدم 'app' مباشرة
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
-                                              
+    
