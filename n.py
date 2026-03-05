@@ -7,15 +7,18 @@ from datetime import datetime
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 
+
+# تفعيل CORS للسماح للوحة والموقع بالاتصال بالسيرفر
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
-# قاعدة بيانات Neon
+# قاعدة بيانات Neon - تأكد من صحة الرابط دائماً
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://neondb_owner:npg_m8LEJPzVH7jw@ep-sweet-mode-ai35kmho-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# --- الجداول ---
+# --- تعريف الجداول (قاعدة البيانات) ---
+
 class Project(db.Model):
     __tablename__ = 'projects'
     id = db.Column(db.Integer, primary_key=True)
@@ -36,32 +39,50 @@ class About(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.Text)
 
+# إنشاء الجداول تلقائياً عند التشغيل
 with app.app_context():
     db.create_all()
 
-# --- المسارات ---
+# --- المسارات (Endpoints) ---
 
+# رفع الصور إلى ImgBB
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
-    if 'file' not in request.files: return jsonify({"error": "No file"}), 400
+    if 'file' not in request.files: 
+        return jsonify({"error": "no file"}), 400
     file = request.files['file']
     api_key_imgbb = "6876793f18a24c535787964a06560946" 
     try:
-        response = requests.post("https://api.imgbb.com/1/upload", params={"key": api_key_imgbb}, files={"image": file.read()}, timeout=30)
-        return jsonify({"url": response.json()['data']['url']}) if response.status_code == 200 else (jsonify({"error": "Upload failed"}), 500)
-    except Exception as e: return jsonify({"error": str(e)}), 500
+        response = requests.post(
+            "https://api.imgbb.com/1/upload", 
+            params={"key": api_key_imgbb}, 
+            files={"image": file.read()}, 
+            timeout=30
+        )
+        if response.status_code == 200:
+            return jsonify({"url": response.json()['data']['url']})
+        return jsonify({"error": "upload failed"}), 500
+    except Exception as e: 
+        return jsonify({"error": str(e)}), 500
 
+# إدارة المشاريع (عرض وإضافة)
 @app.route('/api/projects', methods=['GET', 'POST'])
 def handle_projects():
     if request.method == 'POST':
         data = request.json
-        new_p = Project(title=data.get('title'), description=data.get('description'), image_url=data.get('image_url'))
+        new_p = Project(
+            title=data.get('title'), 
+            description=data.get('description'), 
+            image_url=data.get('image_url')
+        )
         db.session.add(new_p)
         db.session.commit()
-        return jsonify({"message": "Saved"}), 201
+        return jsonify({"message": "saved"}), 201
+    
     all_p = Project.query.order_by(Project.created_at.desc()).all()
     return jsonify([{"id":p.id,"title":p.title,"description":p.description,"image_url":p.image_url} for p in all_p])
 
+# إدارة المشاريع (تعديل وحذف)
 @app.route('/api/projects/<int:id>', methods=['PUT', 'DELETE'])
 def update_delete_project(id):
     p = Project.query.get_or_404(id)
@@ -71,11 +92,13 @@ def update_delete_project(id):
         p.description = data.get('description', p.description)
         p.image_url = data.get('image_url', p.image_url)
         db.session.commit()
-        return jsonify({"message": "Updated"})
+        return jsonify({"message": "updated"})
+    
     db.session.delete(p)
     db.session.commit()
-    return jsonify({"message": "Deleted"})
+    return jsonify({"message": "deleted"})
 
+# إدارة الرسائل
 @app.route('/api/messages', methods=['GET', 'POST'])
 def handle_messages():
     if request.method == 'POST':
@@ -83,29 +106,34 @@ def handle_messages():
         new_m = Message(name=data.get('name'), message=data.get('message'))
         db.session.add(new_m)
         db.session.commit()
-        return jsonify({"message": "Sent"}), 201
+        return jsonify({"message": "sent"}), 201
+    
     all_m = Message.query.order_by(Message.created_at.desc()).all()
     return jsonify([{"id":m.id,"name":m.name,"message":m.message} for m in all_m])
 
+# حذف رسالة
 @app.route('/api/messages/<int:id>', methods=['DELETE'])
 def delete_message(id):
     m = Message.query.get_or_404(id)
     db.session.delete(m)
     db.session.commit()
-    return jsonify({"message": "Deleted"})
+    return jsonify({"message": "deleted"})
 
+# إدارة النبذة الشخصية
 @app.route('/api/about', methods=['GET', 'POST'])
 def handle_about():
     about_record = About.query.first()
     if request.method == 'POST':
         content = request.json.get('content')
-        if about_record: about_record.content = content
-        else: db.session.add(About(content=content))
+        if about_record: 
+            about_record.content = content
+        else: 
+            db.session.add(About(content=content))
         db.session.commit()
-        return jsonify({"message": "Updated"})
+        return jsonify({"message": "updated"})
     return jsonify({"content": about_record.content if about_record else ""})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
-    
+        
